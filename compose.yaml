@@ -1,6 +1,6 @@
 services:
   parakeet:
-    build: .
+    image: ghcr.io/amcfague/wyoming-parakeet-wrapper:latest
     platform: linux/amd64
     ports:
       - "10300:10300"
