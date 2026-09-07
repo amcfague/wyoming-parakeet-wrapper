@@ -1,0 +1,13 @@
+services:
+  parakeet:
+    build: .
+    platform: linux/amd64
+    ports:
+      - "10300:10300"
+    volumes:
+      - parakeet-models:/models
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  parakeet-models:
