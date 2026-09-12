@@ -11,8 +11,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY server.py http_api.py .
+COPY server.py .
 
 VOLUME ["/models"]
-EXPOSE 10300 8000
+EXPOSE 10300
 ENTRYPOINT ["python", "/app/server.py"]

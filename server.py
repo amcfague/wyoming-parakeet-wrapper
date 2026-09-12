@@ -6,8 +6,6 @@ import logging
 from functools import partial
 
 import numpy as np
-from aiohttp import web
-from http_api import make_app, recognize
 from wyoming.asr import Transcript, Transcribe
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.error import Error
@@ -50,6 +48,17 @@ def load_model():
     )
     model.recognize(np.zeros(RATE, dtype=np.float32), sample_rate=RATE)
     return model
+
+
+async def recognize(model, lock, waveform):
+    async with lock:
+        task = asyncio.create_task(asyncio.to_thread(model.recognize, waveform, sample_rate=RATE))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # Keep the model locked until its worker thread finishes.
+            await task
+            raise
 
 
 class ParakeetHandler(AsyncEventHandler):
@@ -176,8 +185,6 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--uri", default="tcp://0.0.0.0:10300")
     parser.add_argument("--max-audio-seconds", type=int, default=60)
-    parser.add_argument("--http-host", default="0.0.0.0")
-    parser.add_argument("--http-port", type=int, default=8000)
     args = parser.parse_args()
     if args.max_audio_seconds < 1:
         parser.error("--max-audio-seconds must be positive")
@@ -188,20 +195,15 @@ async def main() -> None:
     LOGGER.info("Model ready")
 
     server = AsyncServer.from_uri(args.uri)
-    lock = asyncio.Lock()
-    runner = web.AppRunner(make_app(model, lock, MODEL))
-    await runner.setup()
-    try:
-        await web.TCPSite(runner, args.http_host, args.http_port).start()
-        await server.run(partial(
+    await server.run(
+        partial(
             ParakeetHandler,
             make_info(),
             model,
-            lock,
+            asyncio.Lock(),
             args.max_audio_seconds * RATE * WIDTH * CHANNELS,
-        ))
-    finally:
-        await runner.cleanup()
+        )
+    )
 
 
 if __name__ == "__main__":
