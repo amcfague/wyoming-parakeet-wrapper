@@ -1,5 +1,7 @@
 import asyncio
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from functools import partial
 
 import numpy as np
@@ -15,6 +17,7 @@ from server import (
     WIDTH,
     ParakeetHandler,
     make_info,
+    load_model,
     pcm_to_waveform,
     supported_language,
 )
@@ -34,6 +37,24 @@ class FakeModel:
 
 
 class ServerTest(unittest.TestCase):
+    def test_cuda_libraries_loaded_before_model(self):
+        calls = Mock()
+        ort = SimpleNamespace(__file__="/runtime/__init__.py", preload_dlls=calls.preload)
+        asr = SimpleNamespace(load_model=calls.model)
+        with patch.dict("sys.modules", {"onnxruntime": ort, "onnx_asr": asr}), patch("ctypes.CDLL", calls.library):
+            load_model()
+        self.assertEqual([call[0] for call in calls.mock_calls[:3]], ["preload", "library", "model"])
+        calls.preload.assert_called_once_with(directory="")
+        calls.library.assert_called_once_with("/runtime/capi/libonnxruntime_providers_cuda.so")
+
+    def test_missing_cuda_library_stops_startup(self):
+        asr = SimpleNamespace(load_model=Mock())
+        ort = SimpleNamespace(__file__="/runtime/__init__.py", preload_dlls=Mock())
+        with patch.dict("sys.modules", {"onnxruntime": ort, "onnx_asr": asr}), patch("ctypes.CDLL", side_effect=OSError("missing CUDA")):
+            with self.assertRaises(OSError):
+                load_model()
+        asr.load_model.assert_not_called()
+
     def test_pcm_and_language_validation(self):
         np.testing.assert_allclose(
             pcm_to_waveform(b"\x00\x80\x00\x00\xff\x7f"),

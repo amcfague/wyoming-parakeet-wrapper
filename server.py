@@ -34,7 +34,15 @@ def pcm_to_waveform(audio: bytes) -> np.ndarray:
 
 
 def load_model():
+    import ctypes
+    from pathlib import Path
+
     import onnx_asr
+    import onnxruntime as ort
+
+    ort.preload_dlls(directory="")
+    # Fail before ORT can silently fall back to CPU when CUDA libraries are missing.
+    ctypes.CDLL(str(Path(ort.__file__).parent / "capi" / "libonnxruntime_providers_cuda.so"))
 
     model = onnx_asr.load_model(
         MODEL,
