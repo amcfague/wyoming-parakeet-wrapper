@@ -42,8 +42,9 @@ your episodes before relying on automatic edits.
 Long uploads are processed in segments of at most 20 seconds, cutting near
 quiet audio where possible. A cut can still split a word in continuous speech.
 The model lock is released between segments so Home Assistant can transcribe
-while a podcast is in progress. One HTTP upload runs at a time; additional
-uploads receive HTTP 429 with `Retry-After`, which MinusPod handles.
+while a podcast is in progress. Up to four HTTP uploads are accepted concurrently,
+matching MinusPod's four workers. Inference remains serialized between segments.
+Additional uploads receive HTTP 429 with `Retry-After`.
 
 Use `--http-host` and `--http-port` to change the HTTP listener. For a local build:
 

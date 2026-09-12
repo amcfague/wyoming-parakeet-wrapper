@@ -1,6 +1,7 @@
 import asyncio
 import io
 import threading
+import time
 import unittest
 from types import SimpleNamespace
 
@@ -78,6 +79,29 @@ class HttpTest(unittest.IsolatedAsyncioTestCase):
         self.model.recognize = fail
         response = await self.upload()
         self.assertEqual(response.status, 500)
+
+    async def test_four_parallel_uploads_share_one_model(self):
+        original = self.model.recognize
+        active = 0
+        peak = 0
+
+        def slow_recognize(*args, **kwargs):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            try:
+                time.sleep(0.05)
+                return original(*args, **kwargs)
+            finally:
+                active -= 1
+
+        self.model.recognize = slow_recognize
+        responses = await asyncio.gather(*(self.upload() for _ in range(4)))
+        for response in responses:
+            self.assertEqual(response.status, 200, await response.text())
+            self.assertTrue((await response.json())["segments"])
+        self.assertEqual(len(self.model.calls), 4)
+        self.assertEqual(peak, 1)
 
     async def test_cancel_keeps_model_locked(self):
         started, release = threading.Event(), threading.Event()

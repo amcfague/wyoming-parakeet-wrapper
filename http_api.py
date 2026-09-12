@@ -74,15 +74,15 @@ def read_segment(audio):
 
 def make_app(model, lock, model_name):
     timestamped = model.with_timestamps()
-    busy = False
+    active_uploads = 0
 
     async def transcribe(request):
-        nonlocal busy
+        nonlocal active_uploads
         if request.content_type != "multipart/form-data":
             raise web.HTTPBadRequest(text="expected multipart/form-data")
-        if busy:
-            raise web.HTTPTooManyRequests(text="another upload is being transcribed", headers={"Retry-After": "2"})
-        busy = True
+        if active_uploads >= 4:
+            raise web.HTTPTooManyRequests(text="four uploads are already being transcribed", headers={"Retry-After": "2"})
+        active_uploads += 1
         try:
             with tempfile.TemporaryFile() as upload:
                 fields = {}
@@ -154,7 +154,7 @@ def make_app(model, lock, model_name):
             logging.exception("HTTP transcription failed")
             raise web.HTTPInternalServerError(text="transcription failed") from error
         finally:
-            busy = False
+            active_uploads -= 1
 
     app = web.Application(client_max_size=MAX_UPLOAD, middlewares=[log_rejections])
     app.router.add_post("/v1/audio/transcriptions", transcribe)
