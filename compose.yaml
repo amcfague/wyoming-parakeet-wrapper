@@ -4,6 +4,7 @@ services:
     platform: linux/amd64
     ports:
       - "10300:10300"
+      - "8000:8000"
     volumes:
       - parakeet-models:/models
     gpus: all
