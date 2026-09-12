@@ -59,8 +59,10 @@ class HttpTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(n <= 20 * 16000 for n in self.model.calls))
 
     async def test_rejects_bad_inputs(self):
-        response = await self.client.post("/v1/audio/transcriptions", json={})
+        with self.assertLogs("http_api", level="WARNING") as logs:
+            response = await self.client.post("/v1/audio/transcriptions", json={})
         self.assertEqual(response.status, 400)
+        self.assertIn("expected multipart/form-data", logs.output[0])
         for kwargs in ({"language": "de"}, {"rate": 8000}, {"seconds": 0}):
             response = await self.upload(**kwargs)
             self.assertEqual(response.status, 400, await response.text())

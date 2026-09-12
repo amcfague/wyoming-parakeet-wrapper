@@ -10,6 +10,18 @@ from aiohttp import web
 
 RATE = 16_000
 MAX_UPLOAD = 256 * 1024 * 1024
+LOGGER = logging.getLogger(__name__)
+
+
+@web.middleware
+async def log_rejections(request, handler):
+    try:
+        return await handler(request)
+    except web.HTTPException as error:
+        if error.status >= 400:
+            LOGGER.warning("HTTP %s %s rejected (%s): %s", request.method, request.path,
+                           error.status, error.text)
+        raise
 
 
 async def recognize(model, lock, waveform):
@@ -144,6 +156,6 @@ def make_app(model, lock, model_name):
         finally:
             busy = False
 
-    app = web.Application(client_max_size=MAX_UPLOAD)
+    app = web.Application(client_max_size=MAX_UPLOAD, middlewares=[log_rejections])
     app.router.add_post("/v1/audio/transcriptions", transcribe)
     return app
